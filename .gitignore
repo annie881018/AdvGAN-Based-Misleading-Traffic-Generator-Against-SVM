@@ -1,2 +1,5 @@
 *.csv
 *.pcap
+__pycache__
+.ipynb_checkpoints
+*.png

@@ -40,12 +40,12 @@ num_data = args.num_data
 
 
 Attack = AdvGAN_attack.AdvGAN_attack(epochs=epochs, features=features, lr=learning_rate,thresh=thresh, alpha=alpha, beta=beta, num=num_data)
-print(f"Load Data...")
+# print(f"Load Data...")
 X = load_data('dataset_slowloris_normal_0225.csv')
-print(f"Original Data: {X.shape}\n")
+# print(f"Original Data: {X.shape}\n")
 
 # Select one original attacked features
 X_train = X[num_data:num_data+1]
-print(X_train)
+# print(X_train)
 # print(f"Start to train data {args.num_data}----------------------")
 Attack.train(X_train)

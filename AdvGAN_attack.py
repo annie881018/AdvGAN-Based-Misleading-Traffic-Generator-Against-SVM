@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import Generator_Against_SVM
 import Discriminator_SVM
+from datetime import datetime
 
 class AdvGAN_attack:
     def __init__(self,
@@ -28,14 +29,12 @@ class AdvGAN_attack:
         self.num = num
 
     def generator_loss(self, d_output):
-        return self.cross_entropy(tf.zeros_like(d_output), d_output)
-        # return -tf.reduce_mean(tf.zeros_like(d_output), d_output)
+        # 使用 hinge loss，目標是讓 d_output < 0
+        return tf.reduce_mean(tf.maximum(0.0, d_output + 0.1))  # margin = 0.1
 
     # loss function to influence the perturbation to be as close to 0 as possible
-    def perturb_loss(self, preds, thresh=0.3):
-        zeros = tf.zeros(tf.shape(preds)[0])
-        norm = tf.norm(preds, axis=1)
-        return tf.reduce_mean(tf.maximum(zeros, norm - thresh))
+    def perturb_loss(self, preds, thresh):
+        return tf.reduce_mean(tf.square(preds))  # L2 範數平方，懲罰過大的微擾
 
     ATTACKED_FEATURES_MIN = [0.0, 2.0, 60.0, 54.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     ATTACKED_FEATURES_MAX = [49962.0, 16.0, 640.0, 590.0, 49962.0, 0.0, 2.0, 4.0, 8.0, 12.0]
@@ -80,18 +79,29 @@ class AdvGAN_attack:
     # 訓練過程
     def train(self, X):
         num_train = f'{self.num}_lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
-        print(f"Start to train data {num_train}----------------------")
-        filename_output = f"generated_data_{num_train}.csv"
+        # print(f"Start to train data {num_train}----------------------")
+        mode = "w"
+        formatted_date = datetime.today().strftime("%m%d")
+        # 設定輸出目錄
+        output_dir = f"result/{formatted_date}"
+
+        # 如果目錄不存在，則創建它
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 生成完整的輸出檔案路徑
+        filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
+        # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
         fields = self.features.append("label")
-        # 先寫入欄位名稱
         df = pd.DataFrame(X, columns=fields)
-        df.to_csv(filename_output, mode="w", index=False, encoding="utf-8")
-        filename_losses = f"losses_{num_train}.txt"
-        mode = "a"
-        if os.path.exists(filename_losses):
-            mode = "w"          # overwrite the old data
-        file_losses = open(filename_losses, mode, encoding="utf-8")
+        df.to_csv(filename_output, mode=mode, index=False, encoding="utf-8")
         
+        filename_losses = os.path.join(output_dir, f"losses_{num_train}.csv")
+        # filename_losses = f"result/{formatted_date}/losses_{num_train}.csv"
+        # file_losses = open(filename_losses, mode, encoding="utf-8")
+        fields_eval = ['loss', 'gen_loss', 'perturb_loss']
+        df_loss = pd.DataFrame([fields_eval])
+        df_loss.to_csv(filename_losses, mode=mode, index=False, encoding="utf-8")
+        mode = "a"
         loss = 0
         generated_data = []
         predict = -999
@@ -100,13 +110,13 @@ class AdvGAN_attack:
             # 執行訓練步驟
             loss, generated_data, predict, g_loss, perturb_loss = self.train_step(X)
 
-            if epoch % 1000 == 0:
-                print(f'Epoch {epoch}, Loss: {loss:.4f}, G_Loss: {g_loss:.4f}')
-                print(f'predict: {predict}')
-                #print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}')
-                # Print the values of generated_features
-                print("generated_data:", generated_data)
-                print("----------------------------------------------------------------------")
+            # if epoch % 1000 == 0:
+            #     print(f'Epoch {epoch}, Loss: {loss:.4f}, G_Loss: {g_loss:.4f}')
+            #     print(f'predict: {predict}')
+            #     #print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}')
+            #     # Print the values of generated_features
+            #     print("generated_data:", generated_data)
+            #     print("----------------------------------------------------------------------")
 
             # Record generated data and loss
             # transform generated_data and predict to numpy array
@@ -117,11 +127,10 @@ class AdvGAN_attack:
             # 轉換為 DataFrame
             df = pd.DataFrame(merged_array, columns=fields)
             # Write to csv
-            df.to_csv(filename_output, mode="a", header=False, index=False, encoding="utf-8")
-            
-            file_losses.write(f"loss: {loss},  G_Loss: {g_loss:.4f}  l_perturb: {perturb_loss:.4f}\n")
-            
-        file_losses.close()    
+            df.to_csv(filename_output, mode=mode, header=False, index=False, encoding="utf-8")
+            df_loss = pd.DataFrame([[f'{loss:.4f}', f'{g_loss:.4f}', f'{perturb_loss:.4f}']], columns=fields_eval)
+            df_loss.to_csv(filename_losses, mode=mode, header=False, index=False, encoding="utf-8")
+        pd.DataFrame(predict).to_csv(os.path.join(output_dir, "label.csv"), mode='a', header=False, index=False, encoding="utf-8")
         # print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}')
         # print(f'predict: {predict}')
         # print("----------------------------------------------------------------------")
