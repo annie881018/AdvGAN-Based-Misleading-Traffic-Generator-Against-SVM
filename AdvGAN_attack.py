@@ -35,6 +35,18 @@ class AdvGAN_attack:
     # loss function to influence the perturbation to be as close to 0 as possible
     def perturb_loss(self, preds, thresh):
         return tf.reduce_mean(tf.square(preds))  # L2 範數平方，懲罰過大的微擾
+    # loss function to influence the output close to boundary
+    def boundary_distance_loss(self, x):
+        x = tf.reshape(x, (1, -1))
+        # get weigth(w) and bias(b) of discriminator
+        w = self.discriminator.coef_[0]
+        b = self.discriminator.intercept_[0]
+        # 轉為 TensorFlow tensor
+        w_tf = tf.constant(w.reshape(-1, 1), dtype=tf.float32)  # shape: (feature_dim, 1)
+        b_tf = tf.constant(b, dtype=tf.float32)                 # scalar
+        logits = tf.matmul(x, w_tf) + b_tf                 # shape: (batch_size, 1)
+        distance = tf.abs(logits) / tf.norm(w_tf)          # shape: (batch_size, 1)
+        return -tf.reduce_mean(distance)
 
     ATTACKED_FEATURES_MIN = [0.0, 2.0, 60.0, 54.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     ATTACKED_FEATURES_MAX = [49962.0, 16.0, 640.0, 590.0, 49962.0, 0.0, 2.0, 4.0, 8.0, 12.0]
@@ -62,7 +74,8 @@ class AdvGAN_attack:
             g_loss = self.generator_loss(output)
             
             perturb_loss = self.perturb_loss(perturbation, self.thresh)
-            loss = self.alpha * g_loss + self.beta * perturb_loss
+            bd_loss = self.boundary_distance_loss(X_perturbed)
+            loss = 1 * g_loss + 1 * bd_loss + 1 * perturb_loss
 
         # 計算梯度
         gradients_of_generator = gen_tape.gradient(loss, self.generator.trainable_variables)
@@ -73,7 +86,7 @@ class AdvGAN_attack:
 
             # 應用梯度更新模型
         self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
-        return loss, X_perturbed, predict, g_loss, perturb_loss
+        return loss, X_perturbed, predict, g_loss, perturb_loss, bd_loss
 
 
     # 訓練過程
@@ -91,16 +104,9 @@ class AdvGAN_attack:
         # 生成完整的輸出檔案路徑
         filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
         # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
-        fields = self.features.append("label")
-        df = pd.DataFrame(X, columns=fields)
-        df.to_csv(filename_output, mode=mode, index=False, encoding="utf-8")
-        
-        filename_losses = os.path.join(output_dir, f"losses_{num_train}.csv")
-        # filename_losses = f"result/{formatted_date}/losses_{num_train}.csv"
-        # file_losses = open(filename_losses, mode, encoding="utf-8")
-        fields_eval = ['loss', 'gen_loss', 'perturb_loss']
-        df_loss = pd.DataFrame([fields_eval])
-        df_loss.to_csv(filename_losses, mode=mode, index=False, encoding="utf-8")
+        fields = self.features
+        fields = fields + ["predict", "loss", "gen_loss", "perturb_loss", "db_loss"]
+        print(fields)
         mode = "a"
         loss = 0
         generated_data = []
@@ -108,7 +114,7 @@ class AdvGAN_attack:
         for epoch in range(self.epochs):
             # epoch += 1
             # 執行訓練步驟
-            loss, generated_data, predict, g_loss, perturb_loss = self.train_step(X)
+            loss, generated_data, predict, g_loss, perturb_loss, bd_loss = self.train_step(X)
 
             # if epoch % 1000 == 0:
             #     print(f'Epoch {epoch}, Loss: {loss:.4f}, G_Loss: {g_loss:.4f}')
@@ -122,15 +128,18 @@ class AdvGAN_attack:
             # transform generated_data and predict to numpy array
             generated_data_np = generated_data.numpy()
             predict_np = np.array(predict, dtype=np.float32).reshape(1, -1)
+            losses_np = np.array([loss, g_loss, perturb_loss, bd_loss], dtype=np.float32).reshape(1, -1)
             # merge to shape (1, 10)
             merged_array = np.hstack((generated_data_np, predict_np))
+            merged_array = np.hstack((merged_array, losses_np))
             # 轉換為 DataFrame
-            df = pd.DataFrame(merged_array, columns=fields)
+            df = pd.DataFrame(merged_array)
             # Write to csv
-            df.to_csv(filename_output, mode=mode, header=False, index=False, encoding="utf-8")
-            df_loss = pd.DataFrame([[f'{loss:.4f}', f'{g_loss:.4f}', f'{perturb_loss:.4f}']], columns=fields_eval)
-            df_loss.to_csv(filename_losses, mode=mode, header=False, index=False, encoding="utf-8")
-        pd.DataFrame(predict).to_csv(os.path.join(output_dir, "label.csv"), mode='a', header=False, index=False, encoding="utf-8")
+            df.to_csv(filename_output, mode=mode, header=fields, index=False, encoding="utf-8")
+            if predict == 0:
+                df.to_csv(os.path.join(output_dir, "label_0.csv"), mode='a', header=fields, index=False, encoding="utf-8")
+            fields = False
+       
         # print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}')
         # print(f'predict: {predict}')
         # print("----------------------------------------------------------------------")

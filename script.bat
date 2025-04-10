@@ -16,6 +16,17 @@
 @REM     python main.py --num_data %%i --thresh 5
 @REM     python main.py --num_data %%i --thresh 9
 @REM )
-for /L %%i in (31,1,40) do (
-    python main.py --num_data %%i --thresh 2.5 --alpha 2 --beta 1 --lr 0.000001
+set "lrs= 0.0001 0.00001 0.000001"
+set "alphas= 10 5 3 1 0.5 0.3 0.1"
+set "betas= 10 5 3 1 0.5 0.3 0.1"
+set "threshes= 0.1 0.3 0.5 1 1.5 2 2.5 3"
+for %%l in (%lrs%) do (
+    for %%a in (%alphas%) do (
+        for %%b in (%betas%) do (
+            for %%t in (%threshes%) do (
+                echo Running: python main.py --num_data 200 --thresh %%t --alpha %%a --beta %%b --lr %%l --epochs 5000
+                python main.py --num_data 200 --thresh %%t --alpha %%a --beta %%b --lr %%l --epochs 5000
+            )
+        )
+    )
 )
