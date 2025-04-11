@@ -23,7 +23,7 @@ class AdvGAN_attack:
         self.lr = lr
         self.thresh = thresh
         self.cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-        self.generator_optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr, beta_1=0.5, beta_2=0.999)
+        self.generator_optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
         self.generator = Generator_Against_SVM.build_generator(feature_dim=self.feature_dim)
         self.discriminator = Discriminator_SVM.build_discriminator()
         self.num = num
@@ -33,11 +33,11 @@ class AdvGAN_attack:
         w = self.discriminator.coef_[0]
         w_norm = np.linalg.norm(w)
         margin = 2 / w_norm
-        # 使用 hinge loss，目標是讓 d_output < 0
-        return tf.reduce_mean(tf.maximum(0.0, d_output + margin))  # margin = 0.1
+        return tf.reduce_mean(tf.maximum(0.0, d_output))    # loss=0 if predict label 0
+        # return tf.reduce_mean(tf.maximum(0.0, d_output + margin)) # loss=0 if predict to 0 less than margin
 
     # loss function to influence the output close to boundary
-    def boundary_distance_loss(self, x):
+    def boundary_distance_loss(self, x, thresh):
         x = tf.reshape(x, (1, -1))
         # get weigth(w) and bias(b) of discriminator
         w = self.discriminator.coef_[0]
@@ -47,8 +47,10 @@ class AdvGAN_attack:
         b_tf = tf.constant(b, dtype=tf.float32)                 # scalar
         logits = tf.matmul(x, w_tf) + b_tf                 # shape: (batch_size, 1)
         distance = tf.abs(logits) / tf.norm(w_tf)          # shape: (batch_size, 1)
-        return -tf.reduce_mean(distance)
-        return tf.reduce_mean(tf.square(preds))  # L2 範數平方，懲罰過大的微擾
+        # 只懲罰 logits 遠離邊界（比如 margin 超過 1.0 就加壓）
+        penalty = tf.maximum(0.0, distance - thresh)
+        return -tf.reduce_mean(penalty)
+        # return -tf.reduce_mean(distance)
 
     ATTACKED_FEATURES_MIN = [0.0, 2.0, 60.0, 54.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     ATTACKED_FEATURES_MAX = [49962.0, 16.0, 640.0, 590.0, 49962.0, 0.0, 2.0, 4.0, 8.0, 12.0]
@@ -67,7 +69,8 @@ class AdvGAN_attack:
             # generated_data = tf.round(generated_data)
             # generated_data = self.ATTACKED_FEATURES_MIN + (self.ATTACKED_FEATURES_MAX - self.ATTACKED_FEATURES_MIN) * tf.tanh(generated_data)
             generated_data = self.generator(noise)
-            generated_data = tf.clip_by_value(generated_data, self.ATTACKED_FEATURES_MIN, self.ATTACKED_FEATURES_MAX)
+            generated_data = tf.maximum(generated_data, 0)
+            # generated_data = tf.clip_by_value(generated_data, self.ATTACKED_FEATURES_MIN, self.ATTACKED_FEATURES_MAX)
             # 判別器判斷真實和假數據
             output = self.discriminator.decision_function(generated_data)
             predict = self.discriminator.predict(generated_data)
@@ -76,7 +79,7 @@ class AdvGAN_attack:
 
             # 計算損失
             g_loss = self.generator_loss(output)
-            bd_loss = self.boundary_distance_loss(generated_data)
+            bd_loss = self.boundary_distance_loss(generated_data, self.thresh)
             # perturb_loss = self.perturb_loss(perturbation, self.thresh)
             # loss = self.alpha * g_loss + self.beta * perturb_loss
             loss = self.alpha * g_loss + self.beta * bd_loss
@@ -108,13 +111,14 @@ class AdvGAN_attack:
         filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
         # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
         fields = self.features
-        fields = fields + ["predict", "loss", "gen_loss", "db_loss"]
+        fields = fields + ["predict", "loss", "gen_loss", "bd_loss"]
         print(fields)
         mode = "a"
         
         loss = 0
         generated_data = []
         predict = -999
+        print(self.generator.summary())
         for epoch in range(self.epochs):
             # epoch += 1
             # 執行訓練步驟

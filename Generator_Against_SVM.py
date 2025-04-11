@@ -11,11 +11,11 @@ def build_generator(feature_dim):
 
     # 第一層：增加神經元數量
     model.add(tf.keras.layers.Dense(256))
-    model.add(tf.keras.layers.LeakyReLU(negative_slope=0.2))  # 改進 LeakyReLU 的斜率
+    model.add(tf.keras.layers.LeakyReLU(negative_slope=2))  # 改進 LeakyReLU 的斜率
 
     # 第二層
     model.add(tf.keras.layers.Dense(128))
-    model.add(tf.keras.layers.LeakyReLU(negative_slope=0.2))
+    model.add(tf.keras.layers.LeakyReLU(negative_slope=2))
 
     # 第三層
     model.add(tf.keras.layers.Dense(64))

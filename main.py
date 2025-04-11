@@ -5,7 +5,7 @@ import pandas as pd
 import AdvGAN_attack
 
 
-# Load data
+# Load label 1 data
 def load_data(dataset):
     df = pd.read_csv(dataset)
     df_selected = df[df['label'] == 1]

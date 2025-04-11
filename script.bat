@@ -16,6 +16,20 @@
 @REM     python main.py --num_data %%i --thresh 5
 @REM     python main.py --num_data %%i --thresh 9
 @REM )
-for /L %%i in (31,1,40) do (
-    python main.py --num_data %%i --thresh 2.5 --alpha 2 --beta 1 --lr 0.000001
-)
+@REM for /L %%i in (0,1,10) do (
+@REM     python main.py --num_data %%i --thresh 2.5 --alpha 0.6 --beta 0.4 --lr 0.000001
+@REM )
+@REM echo Running: python main.py --num_data 12 --thresh 2.5 --alpha 0.6 --beta 0.4 --lr 0.000001
+@REM python main.py --num_data 12 --thresh 2.5 --alpha 0.6 --beta 0.4 --lr 0.000001
+
+
+@REM echo Running: python main.py --num_data 12 --thresh 2.5 --alpha 0.1 --beta 1 --lr 0.000001
+@REM python main.py --num_data 12 --thresh 2.5 --alpha 0.1 --beta 1 --lr 0.000001
+
+
+@REM echo Running: python main.py --num_data 12 --thresh 2.5 --alpha 0.01 --beta 1 --lr 0.000001
+@REM python main.py --num_data 12 --thresh 2.5 --alpha 0.01 --beta 1 --lr 0.000001
+
+
+echo Running: python main.py --num_data 15 --thresh 2.5 --alpha 0.01 --beta 1 --lr 0.000001
+python main.py --num_data 15 --thresh 1.0 --alpha 0.01 --beta 1 --lr 0.000001
