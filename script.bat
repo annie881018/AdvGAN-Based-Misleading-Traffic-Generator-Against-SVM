@@ -31,5 +31,5 @@
 @REM python main.py --num_data 12 --thresh 2.5 --alpha 0.01 --beta 1 --lr 0.000001
 
 
-echo Running: python main.py --num_data 15 --thresh 2.5 --alpha 0.01 --beta 1 --lr 0.000001
-python main.py --num_data 15 --thresh 1.0 --alpha 0.01 --beta 1 --lr 0.000001
+echo Running: python main.py --num_data 1 --thresh 2.5 --alpha 0.01 --beta 1 --lr 0.000001
+python main.py --num_data 1 --thresh 1.0 --alpha 0.01 --beta 1 --lr 0.000001

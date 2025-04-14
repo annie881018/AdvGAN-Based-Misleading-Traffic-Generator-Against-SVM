@@ -21,7 +21,7 @@ if __name__ == "__main__":
     features=[
             'flow duration', 'packet count', 'max pkt_length', 'min pkt_length',
             'max iat', 'min iat', 'fin count', 'syn count', 'psh count', 
-            'ack count'
+            'ack count', 'rst count', 'urg count'
             ]
     # Parse arguments
     parser = argparse.ArgumentParser()
