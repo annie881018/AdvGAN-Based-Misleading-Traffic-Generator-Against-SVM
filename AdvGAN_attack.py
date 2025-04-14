@@ -105,7 +105,7 @@ class AdvGAN_attack:
         filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
         # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
         fields = self.features
-        fields = fields + ["predict", "loss", "gen_loss", "perturb_loss", "db_loss"]
+        fields = fields + ["predict", "loss", "gen_loss", "perturb_loss", "bd_loss"]
         print(fields)
         mode = "a"
         loss = 0

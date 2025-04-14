@@ -9,7 +9,7 @@ ATTACKED_FEATURES_MAX = [49962.0, 16.0, 640.0, 590.0, 49962.0, 0.0, 2.0, 4.0, 8.
 features=[
         'flow duration', 'packet count', 'max pkt_length', 'min pkt_length',
         'max iat', 'min iat', 'fin count', 'syn count', 'psh count', 
-        'ack count'
+        'ack count', 'rst count', 'urg count'
         ]
 # Load data
 def load_data(dataset):

@@ -8,13 +8,13 @@ def build_generator(feature_dim):
     # version 1
     inputs = tf.keras.Input(shape=(feature_dim,))
     x = tf.keras.layers.Dense(256)(inputs)  
-    x = tf.keras.layers.LeakyReLU(negative_slope=2)(x)
+    x = tf.keras.layers.LeakyReLU(negative_slope=0.2)(x)
     
     x = tf.keras.layers.Dense(128)(x)
-    x = tf.keras.layers.LeakyReLU(negative_slope=2)(x)
+    x = tf.keras.layers.LeakyReLU(negative_slope=0.2)(x)
 
     x = tf.keras.layers.Dense(64)(x)
-    x = tf.keras.layers.LeakyReLU(negative_slope=2)(x)
+    x = tf.keras.layers.LeakyReLU(negative_slope=0.2)(x)
     outputs = tf.keras.layers.Dense(feature_dim)(x)
     # scale_factor = tf.keras.layers.Dense(1, activation='sigmoid')(x)  # 讓 scale 在 (0,1) 之間
     # x = tf.keras.layers.Dense(feature_dim, activation='tanh')(x)
