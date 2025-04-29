@@ -5,22 +5,22 @@ def build_generator(feature_dim):
     def custom_activation(x):
         
         return x
-    # noise
+    
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Input(shape=(100,)))  # 明確指定輸入形狀
+    model.add(tf.keras.layers.Input(shape=(100,)))  # Indicate input(noise) shape
 
-    # 第一層：增加神經元數量
+    # The first hidden layer
     model.add(tf.keras.layers.Dense(256))
-    model.add(tf.keras.layers.LeakyReLU(negative_slope=2.5))  # 改進 LeakyReLU 的斜率
+    model.add(tf.keras.layers.LeakyReLU(negative_slope=2.5))  # the slope of LeakyReLU influence the range of output
 
-    # 第二層
+    # The second hidden layer
     model.add(tf.keras.layers.Dense(128))
     model.add(tf.keras.layers.LeakyReLU(negative_slope=2.5))
 
-    # 第三層
+    # The third hidden layer
     model.add(tf.keras.layers.Dense(64))
     model.add(tf.keras.layers.LeakyReLU(negative_slope=2.5))
 
-    # 最後一層：輸出10個特徵值
+    # The last layer: output features
     model.add(tf.keras.layers.Dense(feature_dim))
     return model

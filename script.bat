@@ -31,5 +31,9 @@
 @REM python main.py --num_data 12 --thresh 2.5 --alpha 0.01 --beta 1 --lr 0.000001
 
 
-echo Running: python main.py --num_data 4 --thresh 2.5 --alpha 0.01 --beta 1 --lr 0.000001
-python main.py --num_data 4 --thresh 1.0 --alpha 0.01 --beta 1 --lr 0.000001 --epochs 10000
+echo Running: python main.py --num_data 1 --thresh 1.0 --alpha 0.1 --beta 1 --lr 0.000001 --epochs 10000
+python main.py --num_data 14 --thresh 1.0 --alpha 2 --beta 1 --lr 0.000001 --epochs 10000
+echo Running: python main.py --num_data 2 --thresh 1.0 --alpha 1 --beta 1 --lr 0.000001 --epochs 10000
+python main.py --num_data 15 --thresh 1.0 --alpha 3 --beta 1 --lr 0.000001 --epochs 10000
+echo Running: python main.py --num_data 3 --thresh 1.0 --alpha 1 --beta 0.1 --lr 0.000001 --epochs 10000
+python main.py --num_data 16 --thresh 1.0 --alpha 5 --beta 1 --lr 0.000001 --epochs 10000

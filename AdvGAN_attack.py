@@ -10,10 +10,12 @@ class AdvGAN_attack:
     def __init__(self,
                  epochs,
                  features,
-                 lr=0.00001,
+                 MIN,
+                 MAX,
+                 lr=0.000001,
                  thresh=0.3,
-                 alpha=1,
-                 beta=5,
+                 alpha=0.1,
+                 beta=0.1,
                  num=0):
         self.epochs = epochs
         self.features = features
@@ -29,9 +31,15 @@ class AdvGAN_attack:
         self.num = num
         self.w = tf.constant(self.discriminator.coef_[0].reshape(-1, 1), dtype=tf.float32)  # shape: (feature_dim, 1)
         self.b = tf.constant(self.discriminator.intercept_[0], dtype=tf.float32)                 # scalar
-        self.ATTACKED_FEATURES_MIN = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 60.0, 0.0, 0.0, 0.0]
-        self.ATTACKED_FEATURES_MAX = [2.0, 4.0, 8.0, 12.0, 8.0, 12.0, 16.0, 1843.0, 640.0, 49962.0, 0.0, 49962.0]
+        self.ATTACKED_FEATURES_MIN = MIN
+        self.ATTACKED_FEATURES_MAX = MAX
+    
     # loss function for influencing the output close to label 0
+    def generator_loss_zero_like(self, d_predict):
+        cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+        return cross_entropy(tf.zeros_like(d_predict), d_predict)
+    
+    # loss function for influencing the output close to 0
     def generator_loss(self, d_output):
         # determine the margin of decision boundary
         w = self.discriminator.coef_[0]
@@ -39,17 +47,18 @@ class AdvGAN_attack:
         margin = 2 / w_norm
         return tf.reduce_mean(tf.maximum(0.0, d_output))    # loss=0 if predict label 0
         # return tf.reduce_mean(tf.maximum(0.0, d_output + margin)) # loss=0 if predict to 0 less than margin
+    
+    # loss function for influencing the output close to margin
     def margin_loss(self, x):
-        
-        # 計算 w^T x
+        # Caculate |w^T x + b - target_plane| / ||w||
         dot = tf.tensordot(x, self.w, axes=1)
-        # 計算 |w^T x + b - target_plane|
         distance = tf.abs(dot + self.b - (-1))
-        # 除以 ||w||
         normalized = distance / tf.norm(self.w)
         return tf.reduce_mean(normalized)
+    
     # loss function for influencing the output close to boundary
     def boundary_distance_loss(self, x, thresh):
+        # Caculate |w^T x + b| / ||w||
         x = tf.reshape(x, (1, -1))
         logits = tf.matmul(x, self.w) + self.b               # shape: (batch_size, 1)
         distance = tf.abs(logits) / tf.norm(self.w)          # shape: (batch_size, 1)
@@ -79,25 +88,26 @@ class AdvGAN_attack:
 
             # Caculate the loss
             # g_loss = self.generator_loss(output)
-            g_loss = self.margin_loss(generated_data)
+            # g_loss = self.margin_loss(generated_data)
+            g_loss = self.generator_loss_zero_like(predict)
             bd_loss = self.boundary_distance_loss(generated_data, self.thresh)
             # perturb_loss = self.perturb_loss(perturbation, self.thresh)
             # loss = self.alpha * g_loss + self.beta * perturb_loss
             loss = self.alpha * g_loss + self.beta * bd_loss
 
-        # 計算梯度
+        # Caculate gradients
         gradients_of_generator = gen_tape.gradient(loss, self.generator.trainable_variables)
         # print("Generator gradients:", gradients_of_generator)
         
         if any(g is None for g in gradients_of_generator):
             raise ValueError("One or more generator gradients are None.")
 
-            # 應用梯度更新模型
+        # Apply gradients to optimize model
         self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
         return loss, generated_data, predict, g_loss, bd_loss
 
 
-    # 訓練過程
+    # Traing process
     def train(self):
         # Set output csv
         num_train = f'{self.num}_lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
@@ -111,7 +121,7 @@ class AdvGAN_attack:
         filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
         # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
         
-        
+        # Complete features fields 
         fields = self.features
         fields = fields + ["predict", "loss", "gen_loss", "bd_loss"]
         
@@ -127,13 +137,13 @@ class AdvGAN_attack:
             # Start to train
             loss, generated_data, predict, g_loss, bd_loss = self.train_step()
             w0, _ = self.generator.layers[0].get_weights()
-            if epoch % 1000 == 0:
-                print(f'Epoch {epoch}, Loss: {loss:.4f}, G_Loss: {g_loss:.4f}')
-                print(f'predict: {predict}')
-                #print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}')
-                # Print the values of generated_features
-                print("generated_data:", generated_data)
-                print("----------------------------------------------------------------------")
+            # if epoch % 1000 == 0:
+            #     print(f'Epoch {epoch}, Loss: {loss:.4f}, G_Loss: {g_loss:.4f}')
+            #     print(f'predict: {predict}')
+            #     #print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}')
+            #     # Print the values of generated_features
+            #     print("generated_data:", generated_data)
+            #     print("----------------------------------------------------------------------")
                 # print(f"W_0: {w0.mean()}")
                 
 
@@ -151,7 +161,7 @@ class AdvGAN_attack:
             merged_array = np.hstack((merged_array, weights_np))
             
             
-            # 轉換為 DataFrame
+            # Transform to DataFrame
             df = pd.DataFrame(merged_array)
             # Write to csv
             df.to_csv(filename_output, mode="a", header=fields, index=False, encoding="utf-8")
