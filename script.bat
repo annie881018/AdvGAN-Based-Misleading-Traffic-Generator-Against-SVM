@@ -17,8 +17,8 @@
 @REM     python main.py --num_data %%i --thresh 9
 @REM )
 set "lrs= 0.0001 0.00001 0.000001"
-set "alphas= 10 5 3 1 0.5 0.3 0.1"
-set "betas= 10 5 3 1 0.5 0.3 0.1"
+set "alphas= 3 1 0.5 0.3 0.1"
+set "betas= 5 3 1 0.5 0.3"
 set "threshes= 0.1 0.3 0.5 1 1.5 2 2.5 3"
 for %%a in (%alphas%) do (
     for %%b in (%betas%) do (
