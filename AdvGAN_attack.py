@@ -132,6 +132,9 @@ class AdvGAN_attack:
         loss = 0
         generated_data = []
         predict = -999
+    
+        all_data = []
+        label_0_data = []
         print(self.generator.summary())
         for epoch in range(self.epochs):
             # Start to train
@@ -161,11 +164,15 @@ class AdvGAN_attack:
             merged_array = np.hstack((merged_array, weights_np))
             
             
-            # Transform to DataFrame
-            df = pd.DataFrame(merged_array)
-            # Write to csv
-            df.to_csv(filename_output, mode="a", header=fields, index=False, encoding="utf-8")
+            all_data.append(merged_array)
             if predict == 0:
-                df.to_csv(os.path.join(output_dir, f"data_{self.num}_label_0.csv"), mode='a', header=fields, index=False, encoding="utf-8")
-            fields = False
+               label_0_data.append(merged_array)
 
+        all_data_np = np.vstack(all_data)
+        df = pd.DataFrame(all_data_np, columns=fields)
+        df.to_csv(filename_output, mode='w', header=fields, index=False, encoding="utf-8")
+        if label_0_data:
+            label_0_data_np = np.vstack(label_0_data)
+            df = pd.DataFrame(label_0_data_np, columns=fields)
+            df.to_csv(os.path.join(output_dir, f"data_{self.num}_label_0.csv"), mode='w', header=fields, index=False, encoding="utf-8")
+        
