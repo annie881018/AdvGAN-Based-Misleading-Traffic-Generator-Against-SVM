@@ -7,10 +7,16 @@ import AdvGAN_attack
 ATTACKED_FEATURES_MIN = [0.0, 2.0, 60.0, 54.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 ATTACKED_FEATURES_MAX = [49962.0, 16.0, 640.0, 590.0, 49962.0, 0.0, 2.0, 4.0, 8.0, 12.0]
 features=[
-        'flow duration', 'packet count', 'max pkt_length', 'min pkt_length',
-        'max iat', 'min iat', 'fin count', 'syn count', 'psh count', 
-        'ack count', 'rst count', 'urg count'
-        ]
+                'flow duration', 'packet count', 'max pkt_length', 'min pkt_length',
+                'max iat', 'min iat', 'fin count', 'syn count', 'psh count', 
+                'ack count'
+                ]
+# features=[
+#         'flow duration', 'packet count', 'max pkt_length', 'min pkt_length',
+#         'max iat', 'min iat', 'fin count', 'syn count', 'psh count', 
+#         'ack count', 'rst count', 'urg count'
+#         ]
+
 # Load data
 def load_data(dataset):
     df = pd.read_csv(dataset)
@@ -46,6 +52,6 @@ X = load_data('dataset_slowloris_normal_0225.csv')
 
 # Select one original attacked features
 X_train = X[num_data:num_data+1]
-# print(X_train)
+print(X_train)
 # print(f"Start to train data {args.num_data}----------------------")
 Attack.train(X_train)
