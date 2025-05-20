@@ -45,7 +45,7 @@ class AdvGAN_attack:
         w = self.discriminator.coef_[0]
         w_norm = np.linalg.norm(w)
         margin = 2 / w_norm
-        return tf.reduce_mean(tf.maximum(0.0, d_output))    # loss=0 if predict label 0
+        return tf.reduce_mean(tf.maximum(0.0, d_output + 1.0))    # loss=0 if predict label 0
         # return tf.reduce_mean(tf.maximum(0.0, d_output + margin)) # loss=0 if predict to 0 less than margin
     
     # loss function for influencing the output close to margin
@@ -79,17 +79,16 @@ class AdvGAN_attack:
             generated_data = tf.clip_by_value(generated_data, self.ATTACKED_FEATURES_MIN, self.ATTACKED_FEATURES_MAX)
             
             # Pass generated data to Discriminator to get predict label,
-            # the range of output is between -1(label 0) and +1(label 1), 
+            # the range of output is float between -1(label 0) and +1(label 1), 
             # predict is 0 or 1.
             output = self.discriminator.decision_function(generated_data)   
             predict = self.discriminator.predict(generated_data)
-            # output = self.discriminator.decision_function(generated_data)
-            # print(f'output:{output}')
 
             # Caculate the loss
             # g_loss = self.generator_loss(output)
-            # g_loss = self.margin_loss(generated_data)
-            g_loss = self.generator_loss_zero_like(predict)
+            g_loss = self.margin_loss(generated_data)
+            # g_loss = self.generator_loss_zero_like(predict)
+            
             bd_loss = self.boundary_distance_loss(generated_data, self.thresh)
             # perturb_loss = self.perturb_loss(perturbation, self.thresh)
             # loss = self.alpha * g_loss + self.beta * perturb_loss
