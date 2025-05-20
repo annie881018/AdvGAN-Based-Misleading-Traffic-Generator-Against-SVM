@@ -31,14 +31,25 @@ class AdvGAN_attack:
         self.b = tf.constant(self.discriminator.intercept_[0], dtype=tf.float32)                 # scalar
         self.ATTACKED_FEATURES_MIN = [0.0, 2.0, 60.0, 54.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.ATTACKED_FEATURES_MAX = [49962.0, 16.0, 640.0, 590.0, 49962.0, 0.0, 2.0, 4.0, 8.0, 12.0]
-
+    # loss function for influencing the output close to label 0
+    def generator_loss_zero_like(self, d_predict):
+        cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+        return cross_entropy(tf.zeros_like(d_predict), d_predict)
+    
     def generator_loss(self, d_output):
         # determine the margin of decision boundary
         w_norm = np.linalg.norm(self.w)
-        margin = 2 / w_norm
         return tf.reduce_mean(tf.maximum(0.0, d_output + 1.0))    # loss=0 if predict label 0
         # return tf.reduce_mean(tf.maximum(0.0, d_output + margin)) # loss=0 if predict to 0 less than margin
-
+    
+    # loss function for influencing the output close to margin
+    def margin_loss(self, x):
+        # Caculate |w^T x + b - target_plane| / ||w||
+        dot = tf.tensordot(x, self.w, axes=1)
+        distance = tf.abs(dot + self.b - (-1))
+        normalized = distance / tf.norm(self.w)
+        return tf.reduce_mean(normalized)
+    
     # loss function to influence the output close to boundary
     def boundary_distance_loss(self, x, thresh):
         x = tf.reshape(x, (1, -1))
@@ -58,7 +69,7 @@ class AdvGAN_attack:
         with tf.GradientTape() as gen_tape:
             
             # Use generator to generate perturbation
-            perturbation = self.generator(X)
+            perturbation = self.generator(noise)
             generated_data = tf.maximum(X + perturbation, 0)  # 確保 generated_data >= 0
             # generated_data = tf.stop_gradient(tf.clip_by_value(generated_data, self.ATTACKED_FEATURES_MIN, self.ATTACKED_FEATURES_MAX))
             # generated_data = tf.round(generated_data)
@@ -68,11 +79,12 @@ class AdvGAN_attack:
             # 判別器判斷真實和假數據
             output = self.discriminator.decision_function(generated_data)
             predict = self.discriminator.predict(generated_data)
-            # output = self.discriminator.decision_function(generated_data)
-            # print(f'output:{output}')
 
             # 計算損失
-            g_loss = self.generator_loss(output)
+            g_loss = self.generator_loss_zero_like(predict)
+            # g_loss = self.margin_loss(generated_data)
+            # g_loss = self.generator_loss(output)
+            
             bd_loss = self.boundary_distance_loss(generated_data, self.thresh)
             # perturb_loss = self.perturb_loss(perturbation, self.thresh)
             # loss = self.alpha * g_loss + self.beta * perturb_loss

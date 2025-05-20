@@ -6,7 +6,8 @@ def build_generator(feature_dim):
         
         return x
     # version 1
-    inputs = tf.keras.Input(shape=(feature_dim,))
+    # inputs = tf.keras.Input(shape=(feature_dim,))
+    inputs = tf.keras.Input(shape=(100,))
     x = tf.keras.layers.Dense(256)(inputs)  
     x = tf.keras.layers.LeakyReLU(negative_slope=0.2)(x)
     
