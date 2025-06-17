@@ -2,7 +2,7 @@
 import argparse
 import numpy as np
 import pandas as pd
-import AdvGAN
+import AdvGAN_based
 
 ATTACKED_FEATURES_MIN = [0.0, 2.0, 60.0, 54.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 ATTACKED_FEATURES_MAX = [49962.0, 16.0, 640.0, 590.0, 49962.0, 0.0, 2.0, 4.0, 8.0, 12.0]
@@ -46,7 +46,7 @@ num_data = args.num_data
 
 
 
-Attack = AdvGAN.AdvGAN_attack(epochs=epochs, features=features, lr=learning_rate,thresh=thresh, alpha=alpha, beta=beta, num=num_data)
+Attack = AdvGAN_based.AdvGAN_attack(epochs=epochs, features=features, lr=learning_rate,thresh=thresh, alpha=alpha, beta=beta, num=num_data)
 # print(f"Load Data...")
 # use dataset not for target model
 X = load_data('dataset_slowloris_normal_0225.csv')

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import os
 import Generator
-import AdvGAN_Target_model
+import AdvGAN_Target_Model
 import AdvGAN_Discriminator
 from datetime import datetime
     
@@ -29,7 +29,7 @@ class AdvGAN_attack:
         self.discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
         self.generator = Generator.build_generator(feature_dim=self.feature_dim)
         self.discriminator = AdvGAN_Discriminator.build_discriminator(feature_dim=self.feature_dim)
-        self.target_model = AdvGAN_Target_model.build_discriminator()
+        self.target_model = AdvGAN_Target_Model.build_discriminator()
         self.num = num
         # self.w = tf.constant(self.discriminator.coef_[0].reshape(-1, 1), dtype=tf.float32)  # shape: (feature_dim, 1)
         # self.b = tf.constant(self.discriminator.intercept_[0], dtype=tf.float32)                 # scalar
@@ -128,9 +128,11 @@ class AdvGAN_attack:
 
     # 訓練過程
     def train(self, X):
-        num_train = f'{self.num}_lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
+        # num_train = f'{self.num}_lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
+        num_train = f'{self.num}'
         # print(f"Start to train data {num_train}----------------------")
-        formatted_date = datetime.today().strftime("%m%d")
+        # formatted_date = datetime.today().strftime("%m%d")
+        formatted_date = f'lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
         # 設定輸出目錄
         output_dir = f"result/{formatted_date}"
 
