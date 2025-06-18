@@ -86,8 +86,8 @@ class AdvGAN_attack:
 
             # Caculate the loss
             # g_loss = self.generator_loss(output)
-            g_loss = self.margin_loss(generated_data)
-            # g_loss = self.generator_loss_zero_like(predict)
+            # g_loss = self.margin_loss(generated_data)
+            g_loss = self.generator_loss_zero_like(predict)
             
             bd_loss = self.boundary_distance_loss(generated_data, self.thresh)
             # perturb_loss = self.perturb_loss(perturbation, self.thresh)

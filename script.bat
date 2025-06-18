@@ -41,7 +41,7 @@
 @REM     python main.py --num_data %%i --thresh 1.0 --alpha 1 --beta 1 --lr 0.000001 --epochs 10000
 @REM )
 
-set "alphas= 5 3 1 0.5 0.3 0.1"
+set "alphas= 1 0.5 0.3 0.1"
 set "betas= 5 3 1 0.5 0.3 0.1"
 for %%a in (%alphas%) do (
     for %%b in (%betas%) do (
