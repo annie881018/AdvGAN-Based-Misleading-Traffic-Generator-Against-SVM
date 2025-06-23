@@ -10,25 +10,25 @@
 @REM     python main.py --num_data %%i --alpha 1 --beta 10 --lr 0.00001 --thresh 0.5
 @REM     python main.py --num_data %%i --alpha 0.5 --beta 0.5 --lr 0.00001 --thresh 0.5
 @REM )
-@REM for /L %%i in (89,1,100) do (
-@REM     python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 0.3 --beta 5 --lr 0.000001 --epochs 10000
-@REM     python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 0.5 --beta 1 --lr 0.000001 --epochs 10000
-@REM     @REM python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 3 --beta 0.3 --lr 0.000001 --epochs 10000
-@REM )
-@REM set "lrs= 0.0001 0.00001 0.000001"
-set "alphas= 5 3 1 0.5 0.3 0.1"
-set "betas= 5 3 1 0.5 0.3 0.1"
-set "threshes= 5"
-for %%a in (%alphas%) do (
-    for %%b in (%betas%) do (
-        for %%t in (%threshes%) do (
-            for /L %%i in (0,1,100) do (    
-                echo Running: python AdvGAN_main.py --num_data %%i --thresh %%t --alpha %%a --beta %%b --lr 0.000001 --epochs 10000
-                python AdvGAN_main.py --num_data %%i --thresh %%t --alpha %%a --beta %%b --lr 0.000001 --epochs 10000
-            )
-        )
-    )
+for /L %%i in (1,1,50) do (
+    python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 0.3 --beta 5 --lr 0.000001 --epochs 10000
+    python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 0.5 --beta 1 --lr 0.000001 --epochs 10000
+    @REM python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 3 --beta 0.3 --lr 0.000001 --epochs 10000
 )
+@REM set "lrs= 0.0001 0.00001 0.000001"
+@REM set "alphas= 5 3 1 0.5 0.3 0.1"
+@REM set "betas= 5 3 1 0.5 0.3 0.1"
+@REM set "threshes= 5"
+@REM for %%a in (%alphas%) do (
+@REM     for %%b in (%betas%) do (
+@REM         for %%t in (%threshes%) do (
+@REM             for /L %%i in (0,1,100) do (    
+@REM                 echo Running: python AdvGAN_main.py --num_data %%i --thresh %%t --alpha %%a --beta %%b --lr 0.000001 --epochs 10000
+@REM                 python AdvGAN_main.py --num_data %%i --thresh %%t --alpha %%a --beta %%b --lr 0.000001 --epochs 10000
+@REM             )
+@REM         )
+@REM     )
+@REM )
 @REM set "alphas= 5 3 1 0.5 0.3 0.1"
 @REM set "betas= 5 3 1 0.5 0.3 0.1"
 @REM for %%a in (%alphas%) do (

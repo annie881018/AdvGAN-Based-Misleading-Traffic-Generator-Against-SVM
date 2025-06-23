@@ -6,6 +6,9 @@ import Generator
 import AdvGAN_Target_Model
 import AdvGAN_Discriminator
 from datetime import datetime
+import joblib
+import logging
+import matplotlib.pyplot as plt
     
 class AdvGAN_attack:
     def __init__(self,
@@ -15,7 +18,8 @@ class AdvGAN_attack:
                  thresh=0.3,
                  alpha=1,
                  beta=5,
-                 num=0):
+                 num=0,
+                 batch_size=32):
         self.epochs = epochs
         self.features = features
         self.feature_dim = len(self.features)
@@ -31,6 +35,7 @@ class AdvGAN_attack:
         self.discriminator = AdvGAN_Discriminator.build_discriminator(feature_dim=self.feature_dim)
         self.target_model = AdvGAN_Target_Model.build_discriminator()
         self.num = num
+        self.batch_size = batch_size
         # self.w = tf.constant(self.discriminator.coef_[0].reshape(-1, 1), dtype=tf.float32)  # shape: (feature_dim, 1)
         # self.b = tf.constant(self.discriminator.intercept_[0], dtype=tf.float32)                 # scalar
         self.ATTACKED_FEATURES_MIN = [0.0, 2.0, 60.0, 54.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -76,7 +81,6 @@ class AdvGAN_attack:
         # return -tf.reduce_mean(penalty)
         return -tf.reduce_mean(distance)
 
-
     # 訓練步驟
     #@tf.function
     def train_step(self, X):
@@ -85,6 +89,7 @@ class AdvGAN_attack:
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
             
             # Use generator to generate perturbation
+            X = tf.cast(X, tf.float32)  # 轉型，確保 X 是 float32
             perturbation = self.generator(X)
             generated_data = tf.maximum(X + perturbation, 0)  # 確保 generated_data >= 0
             generated_data = tf.clip_by_value(generated_data, self.ATTACKED_FEATURES_MIN, self.ATTACKED_FEATURES_MAX)
@@ -97,13 +102,13 @@ class AdvGAN_attack:
             
             # Cal loss
             # perturb loss
-            l_perturb = self.perturb_loss(perturbation, self.thresh)
+            l_perturb = tf.reduce_mean(self.perturb_loss(perturbation, self.thresh))
             
             # adversary loss
-            l_adv = self.adv_loss(t_perturbed_probs)
+            l_adv = tf.reduce_mean(self.adv_loss(t_perturbed_probs))
             
             # generator loss
-            g_loss_perturb = self.mse(tf.zeros_like(d_perturbed_probs), d_perturbed_probs)
+            g_loss_perturb = tf.reduce_mean(self.mse(tf.zeros_like(d_perturbed_probs), d_perturbed_probs))
             gen_loss = l_adv + self.alpha * g_loss_perturb + self.beta * l_perturb
             
             # discriminator loss
@@ -127,66 +132,136 @@ class AdvGAN_attack:
 
 
     # 訓練過程
-    def train(self, X):
+    def train(self, X, y):
         # num_train = f'{self.num}_lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
-        num_train = f'{self.num}'
-        # print(f"Start to train data {num_train}----------------------")
-        # formatted_date = datetime.today().strftime("%m%d")
-        formatted_date = f'lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
-        # 設定輸出目錄
-        output_dir = f"result/{formatted_date}"
+        # num_train = f'{self.num}'
+        # # print(f"Start to train data {num_train}----------------------")
+        # # formatted_date = datetime.today().strftime("%m%d")
+        # formatted_date = f'lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
+        # # 設定輸出目錄
+        # output_dir = f"result/{formatted_date}"
 
-        # 如果目錄不存在，則創建它
-        os.makedirs(output_dir, exist_ok=True)
+        # # 如果目錄不存在，則創建它
+        # os.makedirs(output_dir, exist_ok=True)
 
-        # 生成完整的輸出檔案路徑
-        filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
-        # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
-        fields = self.features
-        fields = fields + ["predict", "gen_loss", "disc_loss"]
-        print(fields)
+        # # 生成完整的輸出檔案路徑
+        # filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
+        # # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
+        # fields = self.features
+        # fields = fields + ["predict", "gen_loss", "disc_loss"]
+        # print(fields)
         
-        loss = 0
+        # batch process
+        dataset = tf.data.Dataset.from_tensor_slices((X, y)).batch(self.batch_size)
+        
         generated_data = []
-        predict = -999
+        batch_predict = -999
         
-        append = np.array([1, -999, -999], dtype=np.float32).reshape(1, -1)
-        input_data = np.hstack((X, append))
-        all_data = []
-        all_data.append(input_data)
+        # append = np.array([1, -999, -999], dtype=np.float32).reshape(1, -1)
+        # input_data = np.hstack((X, append))
+        # all_data = []
+        # all_data.append(input_data)
         label_0_data = []
+        success_rates_per_epoch = []
+        # gen_loss_per_epoch = []
+        # disc_loss_per_epoch = []
         print(self.generator.summary())
+        
+        logging.basicConfig(
+            filename="model.log",
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s"
+        )
+        logging.info(f"Train Num: {self.num}, Thresh: {self.thresh}, Alpha: {self.alpha}, Beta: {self.beta}.")
+        logging.info("Start training...")
+        print(f"Total batches: {len(dataset)}")
+        print(f"Total X: {len(X)}")
         for epoch in range(self.epochs):
-            # epoch += 1
-            # 執行訓練步驟
-            generated_data, predict, gen_loss, disc_loss = self.train_step(X)
+            epoch_success_rates = []
+            # epoch_gen_loss = []
+            # epoch_disc_loss = []
+            print(f"[Epoch {epoch}]")
+            for step, (batch_x, batch_y) in enumerate(dataset):
+                # epoch += 1
+                # 執行訓練步驟
+                generated_data, batch_predict, gen_loss, disc_loss = self.train_step(batch_x)
+                
+                # calculate accuracy
+                y_true = batch_y.numpy()
+                y_pred = batch_predict
+                mask_attack = (y_true == 1)
+                mask_success = (y_true == 1) & (y_pred == 0)
+                
+                if np.sum(mask_attack) > 0:
+                    success = np.sum(mask_success) / np.sum(mask_attack)
+                    epoch_success_rates.append(success)    
+            
+            
+            # 記錄這個 epoch 的平均攻擊成功率
+            if epoch_success_rates:
+                mean_success = np.mean(epoch_success_rates)
+            else:
+                mean_success = 0.0            
+            success_rates_per_epoch.append(mean_success)
+            
+            
+            # 記錄這個 epoch 的平均gen_loss
+            # if epoch_gen_loss:
+            #     mean_gen_loss = np.mean(epoch_gen_loss)
+            # else:
+            #     mean_gen_loss = 0.0            
+            # gen_loss_per_epoch.append(mean_gen_loss)
+            
+            # # 記錄這個 epoch 的平均disc_loss
+            # if epoch_disc_loss:
+            #     mean_disc_loss = np.mean(epoch_disc_loss)
+            # else:
+            #     mean_disc_loss = 0.0            
+            # disc_loss_per_epoch.append(mean_disc_loss)
 
-            if epoch % 1000 == 0:
+            if epoch % 10 == 0:
+                print(f"[Epoch {epoch}] Adv Attack Success Rate: {mean_success:.2%}")
                 print(f'Epoch {epoch}, gen_loss: {gen_loss:.4f}, disc_loss: {disc_loss:.4f}')
-                print(f'predict: {predict}')
+                print(f'predict: {batch_predict}')
                 #print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}')
                 # Print the values of generated_features
-                print("generated_data:", generated_data)
+                # print("generated_data:", generated_data)
                 print("----------------------------------------------------------------------")
 
-            # Record generated data and loss
-            # transform generated_data and predict to numpy array
-            generated_data_np = generated_data.numpy()
-            predict_np = np.array(predict, dtype=np.float32).reshape(1, -1)
-            losses_np = np.array([gen_loss, disc_loss], dtype=np.float32).reshape(1, -1)
-            # merge to shape (1, 10)
-            merged_array = np.hstack((generated_data_np, predict_np))
-            merged_array = np.hstack((merged_array, losses_np))
-            all_data.append(merged_array)
-            if predict == 0:
-               label_0_data.append(merged_array)
-        
+                # Record generated data and loss
+                # transform generated_data and predict to numpy array
+                # generated_data_np = generated_data.numpy()
+                # predict_np = np.array(predict, dtype=np.float32).reshape(1, -1)
+                # losses_np = np.array([gen_loss, disc_loss], dtype=np.float32).reshape(1, -1)
+                # # merge to shape (1, 10)
+                # merged_array = np.hstack((generated_data_np, predict_np))
+                # merged_array = np.hstack((merged_array, losses_np))
+                # all_data.append(merged_array)
+                # if predict == 0:
+                #     label_0_data.append(merged_array)
+        accuracy = np.mean(success_rates_per_epoch)
+        # loss_gen = np.mean(gen_loss_per_epoch)
+        logging.info(f"Finish training.\nAccuracy: {accuracy:.4f}, Gen loss: {gen_loss:.4f}, Disc loss: {disc_loss:.4f}")
+        plt.plot(success_rates_per_epoch)
+        plt.xlabel("Epoch")
+        plt.ylabel("Attack Success Rate")
+        plt.title("AdvGAN Attack Success Rate Over Epochs")
+        plt.grid(True)
 
-        all_data_np = np.vstack(all_data)
-        df = pd.DataFrame(all_data_np, columns=fields)
-        df.to_csv(filename_output, mode='w', header=fields, index=False, encoding="utf-8")
-        if label_0_data:
-            label_0_data_np = np.vstack(label_0_data)
-            df = pd.DataFrame(label_0_data_np, columns=fields)
-            df.to_csv(os.path.join(output_dir, f"data_{self.num}_label_0.csv"), mode='w', header=fields, index=False, encoding="utf-8")
+        os.makedirs("fig", exist_ok=True)  # 若資料夾不存在則建立
+        plt.savefig(os.path.join("fig", "Attack_Success_Rate.jpg"))
+        
+        print(f"Save Generator...")
+        joblib.dump(self.generator, "Generator.pkl")
+        logging.info(f"Save generator.")
+        # print(f"Save Disciminator...")
+        # joblib.dump(self.discriminator, "Discriminator.pkl")
+        # logging.info(f"Save discriminator.")
+        # all_data_np = np.vstack(all_data)
+        # df = pd.DataFrame(all_data_np, columns=fields)
+        # df.to_csv(filename_output, mode='w', header=fields, index=False, encoding="utf-8")
+        # if label_0_data:
+        #     label_0_data_np = np.vstack(label_0_data)
+        #     df = pd.DataFrame(label_0_data_np, columns=fields)
+        #     df.to_csv(os.path.join(output_dir, f"data_{self.num}_label_0.csv"), mode='w', header=fields, index=False, encoding="utf-8")
 
