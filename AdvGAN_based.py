@@ -76,7 +76,56 @@ class AdvGAN_attack:
         # return -tf.reduce_mean(penalty)
         return -tf.reduce_mean(distance)
 
+    def constraint_loss(self, generated_samples, epsilon=1e-6):
 
+        flow_duration = generated_samples[:, 0]
+        pkt_count = generated_samples[:, 1]
+        max_pkt_len = generated_samples[:, 2]
+        min_pkt_len = generated_samples[:, 3]
+        max_iat = generated_samples[:, 4]
+        min_iat = generated_samples[:, 5]
+        fin_count = generated_samples[:, 6]
+        syn_count = generated_samples[:, 7]
+        psh_count = generated_samples[:, 8]
+        ack_count = generated_samples[:, 9]
+
+        # Condition 1: max iat > min iat
+        loss1 = tf.nn.relu(epsilon + min_iat - max_iat)
+
+        # Condition 2: min iat == 0 (encourage min_iat to zero)
+        loss2 = tf.square(min_iat)
+
+        # Condition 3: max pkt len > min pkt len
+        loss3 = tf.nn.relu(epsilon + min_pkt_len - max_pkt_len)
+
+        # Condition 4: pkt count > 0
+        loss4 = tf.nn.relu(epsilon - pkt_count)
+
+        # Condition 5: fin count <= ack count
+        loss5 = tf.nn.relu(fin_count - ack_count)
+
+        # Condition 6: psh count <= ack count
+        loss6 = tf.nn.relu(psh_count - ack_count)
+
+        # Condition 7: pkt count >= fin count
+        loss7 = tf.nn.relu(fin_count - pkt_count)
+
+        # Condition 8: pkt count >= syn count
+        loss8 = tf.nn.relu(syn_count - pkt_count)
+
+        # Condition 9: pkt count >= psh count
+        loss9 = tf.nn.relu(psh_count - pkt_count)
+
+        # Condition 10: pkt count >= ack count
+        loss10 = tf.nn.relu(ack_count - pkt_count)
+
+        # Sum all constraint losses
+        total_constraint_loss = tf.reduce_mean(
+            loss1 + loss2 + loss3 + loss4 + loss5 + 
+            loss6 + loss7 + loss8 + loss9 + loss10
+        )
+
+        return total_constraint_loss
     # 訓練步驟
     #@tf.function
     def train_step(self, X):
@@ -102,9 +151,11 @@ class AdvGAN_attack:
             # adversary loss
             l_adv = self.adv_loss(t_perturbed_probs)
             
+            # contraint loss
+            l_cont = self.constraint_loss(generated_data)
             # generator loss
             g_loss_perturb = self.mse(tf.zeros_like(d_perturbed_probs), d_perturbed_probs)
-            gen_loss = l_adv + self.alpha * g_loss_perturb + self.beta * l_perturb
+            gen_loss = l_adv + self.alpha * g_loss_perturb + self.beta * l_perturb + l_cont
             
             # discriminator loss
             d_loss_origin = self.mse(tf.ones_like(d_origin_probs), d_origin_probs)
