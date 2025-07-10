@@ -155,7 +155,7 @@ class AdvGAN_attack:
             l_cont = self.constraint_loss(generated_data)
             # generator loss
             g_loss_perturb = self.mse(tf.zeros_like(d_perturbed_probs), d_perturbed_probs)
-            gen_loss = l_adv + self.alpha * g_loss_perturb + self.beta * l_perturb + l_cont
+            gen_loss = l_adv + self.alpha * g_loss_perturb + self.beta * l_perturb
             
             # discriminator loss
             d_loss_origin = self.mse(tf.ones_like(d_origin_probs), d_origin_probs)
