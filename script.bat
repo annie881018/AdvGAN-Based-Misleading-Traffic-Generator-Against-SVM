@@ -16,7 +16,7 @@
 @REM     @REM python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 3 --beta 0.3 --lr 0.000001 --epochs 10000
 @REM )
 @REM set "lrs= 0.0001 0.00001 0.000001"
-set "alphas= 0.3 0.1"
+set "alphas= 5 3 1"
 set "betas= 5 3 1 0.5 0.3 0.1"
 set "threshes= 5"
 for %%a in (%alphas%) do (
@@ -46,4 +46,9 @@ for %%a in (%alphas%) do (
 @REM         echo Running: python main.py --num_data %%i --thresh %%t --alpha 1 --beta 5 --lr 0.000001 --epochs 50000
 @REM         python AdvGAN_main.py --num_data %%i --thresh %%t --alpha 1 --beta 5 --lr 0.000001 --epochs 50000
 @REM     )
+@REM )
+
+@REM for /L %%i in (84,1,99) do (    
+@REM     echo Running: python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 0.3 --beta 1 --lr 0.000001 --epochs 5000
+@REM     python AdvGAN_main.py --num_data %%i --thresh 5 --alpha 5 --beta 0.5 --lr 0.000001 --epochs 5000
 @REM )

@@ -20,7 +20,7 @@ features=[
 # Load data
 def load_data(dataset):
     df = pd.read_csv(dataset)
-    df_selected = df[df['label'] == 1]
+    df_selected = df[(df['label'] == 1) & (df['flow duration'] > 0) & (df['max iat'] > 0)]
     df_selected = df_selected.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
     df_selected = df_selected.loc[(df_selected != 0).any(axis=1)]
     #df_selected = shuffle(df_selected)
