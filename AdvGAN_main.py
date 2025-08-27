@@ -21,20 +21,23 @@ features=[
 # Load data
 def load_data(dataset):
     df = pd.read_csv(dataset)
-    df_selected = df[(df['label'] == 1) & (df['flow duration'] > 0) & (df['max iat'] > 0)]
+    df_selected = df[(df['label'] == 1)]
     df_selected = df_selected.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
     df_selected = df_selected.loc[(df_selected != 0).any(axis=1)]
-    df_selected = shuffle(df_selected)
+    df_selected = shuffle(df_selected, random_state=42)
     y_train = np.array(df_selected['label'])
     X_train = np.array(df_selected[features])
     return X_train, y_train
 
+
+X, y = load_data('dataset_slowloris_normal_0225.csv')
+length = len(X)
 # Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("--thresh", type=float, default=10.0)
 parser.add_argument("--alpha", type=float, default=10.0)
 parser.add_argument("--beta", type=float, default=1.0)
-parser.add_argument("--num_data", type=int, default=0)
+parser.add_argument("--num_data", type=int, default=length)
 parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--epochs", type=int, default=10000)
 parser.add_argument("--batch_size", type=int, default=10)
@@ -59,7 +62,6 @@ Attack = AdvGAN_based.AdvGAN_attack(epochs=epochs,
                                     batch_size=batch_size)
 # print(f"Load Data...")
 # use dataset not for target model
-X, y = load_data('dataset_slowloris_normal_0225.csv')
 # print(f"Original Data: {X.shape}\n")
 
 # Select one original attacked features
@@ -67,5 +69,6 @@ X, y = load_data('dataset_slowloris_normal_0225.csv')
 # print(X)
 X_train = X[:num_data]
 y_train = y[:num_data]
+# print(X_train )
 # print(f"Start to train data {args.num_data}----------------------")
 Attack.train(X_train, y_train)
