@@ -4,7 +4,11 @@ import pandas as pd
 import os
 import Modified_GAN_Generator
 import Modified_GAN_Target_Model
+from Filter import filtering
 from datetime import datetime
+import joblib
+import logging
+import matplotlib.pyplot as plt
 
 class AdvGAN_attack:
     def __init__(self,
@@ -16,7 +20,8 @@ class AdvGAN_attack:
                  thresh=0.3,
                  alpha=0.1,
                  beta=0.1,
-                 num=0):
+                 num=0,
+                 batch_size=32):
         self.epochs = epochs
         self.features = features
         self.feature_dim = len(self.features)
@@ -33,6 +38,7 @@ class AdvGAN_attack:
         self.b = tf.constant(self.discriminator.intercept_[0], dtype=tf.float32)                 # scalar
         self.ATTACKED_FEATURES_MIN = MIN
         self.ATTACKED_FEATURES_MAX = MAX
+        self.batch_size = batch_size
     
     # loss function for influencing the output close to label 0
     def generator_loss_zero_like(self, d_predict):
@@ -59,22 +65,21 @@ class AdvGAN_attack:
     # loss function for influencing the output close to boundary
     def boundary_distance_loss(self, x, thresh):
         # Caculate |w^T x + b| / ||w||
-        x = tf.reshape(x, (1, -1))
+        # x = tf.reshape(x, (1, -1))
         logits = tf.matmul(x, self.w) + self.b               # shape: (batch_size, 1)
         distance = tf.abs(logits) / tf.norm(self.w)          # shape: (batch_size, 1)
         # 只懲罰 logits 遠離邊界（比如 margin 超過 1.0 就加壓）
-        penalty = tf.maximum(0.0, distance - thresh)
+        # penalty = tf.maximum(0.0, distance - thresh)
         # return -tf.reduce_mean(penalty)
         return -tf.reduce_mean(distance)
 
     # Training steps
     #@tf.function
-    def train_step(self):
+    def train_step(self, noise_batch):
         predict = -1
-        noise = tf.random.normal([1, 100])
         with tf.GradientTape() as gen_tape:
-            
-            generated_data = self.generator(noise)
+
+            generated_data = self.generator(noise_batch)
             # 拆出第 0（flow duration）與第 4（max iat）維
             flow_duration = generated_data[:, 0:1]
             max_iat = generated_data[:, 4:5]
@@ -83,8 +88,8 @@ class AdvGAN_attack:
             part_1_to_3 = generated_data[:, 1:4]   # index 1~3
             part_5_to_9 = generated_data[:, 5:]    # index 5~9
 
-            # 放大比例：z[:, 0] ∈ [-1, 1] → scale_factor ∈ [0, 50]
-            scale_factor = (noise[:, 0:1] + 1.0) * 25.0
+            # 放大比例：z[:, 0] ∈ [-1, 1] → scale_factor ∈ [0, 25]
+            scale_factor = (noise_batch[:, 0:1] + 1.0) * 25.0
 
             # 放大
             flow_duration_scaled = flow_duration * scale_factor
@@ -98,18 +103,18 @@ class AdvGAN_attack:
                 part_5_to_9             # index 5~9
             ], axis=1)
             generated_data = tf.clip_by_value(generated_data, self.ATTACKED_FEATURES_MIN, self.ATTACKED_FEATURES_MAX)
-            
+
             # Pass generated data to Discriminator to get predict label,
-            # the range of output is float between -1(label 0) and +1(label 1), 
+            # the range of output is float between -1(label 0) and +1(label 1),
             # predict is 0 or 1.
-            output = self.discriminator.decision_function(generated_data)   
+            output = self.discriminator.decision_function(generated_data)
             predict = self.discriminator.predict(generated_data)
 
             # Caculate the loss
             # g_loss = self.generator_loss(output)
             g_loss = self.margin_loss(generated_data)
             # g_loss = self.generator_loss_zero_like(predict)
-            
+
             bd_loss = self.boundary_distance_loss(generated_data, self.thresh)
             # perturb_loss = self.perturb_loss(perturbation, self.thresh)
             # 取出第 0 維特徵（flow duration）
@@ -120,7 +125,6 @@ class AdvGAN_attack:
             max_iat_loss = -tf.reduce_mean(max_iat)
             # loss = self.alpha * g_loss + self.beta * perturb_loss
             loss = self.alpha * g_loss + self.beta * bd_loss + 0.5 * duration_loss + 0.2 * max_iat_loss
-
         # Caculate gradients
         gradients_of_generator = gen_tape.gradient(loss, self.generator.trainable_variables)
         # print("Generator gradients:", gradients_of_generator)
@@ -147,64 +151,84 @@ class AdvGAN_attack:
         filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
         # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
         
-        # Complete features fields 
+                # Complete features fields
         fields = self.features
-        fields = fields + ["predict", "loss", "gen_loss", "bd_loss"]
-        
-        # fields = fields + ["weight_l0"]
-        
+        fields = fields + ["predict"]
+
         print(fields)
-        
+
         loss = 0
         generated_data = []
         predict = -999
-    
-        all_data = []
+
+        all_data = pd.DataFrame([], columns=fields)
         label_0_data = []
+        accuracy = []
+        batches = self.num // self.batch_size
         print(self.generator.summary())
+        logging.basicConfig(
+            filename="model.log",
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s"
+        )
+        logging.info(f"Train Num: {self.num}, Thresh: {self.thresh}, Alpha: {self.alpha}, Beta: {self.beta}.")
+        logging.info("Start training...")
         for epoch in range(self.epochs):
             # Start to train
-            loss, generated_data, predict, g_loss, bd_loss = self.train_step()
-            # w0, _ = self.generator.layers[0].get_weights()
-            # if epoch % 1000 == 0:
-            #     print(f'Epoch {epoch}, Loss: {loss:.4f}, G_Loss: {g_loss:.4f}')
-            #     print(f'predict: {predict}')
-            #     #print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}')
-            #     # Print the values of generated_features
-            #     print("generated_data:", generated_data)
-            #     print("----------------------------------------------------------------------")
-                # print(f"W_0: {w0.mean()}")
-                
-            if epoch % 1000 == 0:
-                print(f'Epoch {epoch}, gen_loss: {g_loss:.4f}, disc_loss: {bd_loss:.4f}')
-                print(f'predict: {predict}')
-                #print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}')
-                # Print the values of generated_features
-                print("generated_data:", generated_data)
-                print('-' * 10)
-            # Record generated data and loss
-            # transform generated_data and predict to numpy array
-            generated_data_np = generated_data.numpy()
-            predict_np = np.array(predict, dtype=np.float32).reshape(1, -1)
-            losses_np = np.array([loss, g_loss, bd_loss], dtype=np.float32).reshape(1, -1)
-            # merge to generated_data
-            merged_array = np.hstack((generated_data_np, predict_np))
-            merged_array = np.hstack((merged_array, losses_np))
-            
-            # # Record weights of each layer
-            # weights_np = np.array([w0.mean()], dtype=np.float32).reshape(1, -1)
-            # merged_array = np.hstack((merged_array, weights_np))
-            
-            
-            all_data.append(merged_array)
-            if predict == 0:
-               label_0_data.append(merged_array)
+            epoch_data = []
+            passed = -1
+            total = -1
+            acc = -1
+            successful_attack = -1
+            attack_success_rate = -1
+            generated_df = []
+            for step in range(batches):
+              noise = tf.random.normal([self.batch_size, 100])
+              loss, generated_data, predict, g_loss, bd_loss = self.train_step(noise)
+              # collect data only in the last epoch
 
-        all_data_np = np.vstack(all_data)
-        df = pd.DataFrame(all_data_np, columns=fields)
-        df.to_csv(filename_output, mode='w', header=fields, index=False, encoding="utf-8")
-        # if label_0_data:
-        #     label_0_data_np = np.vstack(label_0_data)
-        #     df = pd.DataFrame(label_0_data_np, columns=fields)
-        #     df.to_csv(os.path.join(output_dir, f"data_{self.num}_label_0.csv"), mode='w', header=fields, index=False, encoding="utf-8")
+
+              generated_data_np = generated_data.numpy()
+              predict_np = np.array(predict, dtype=np.float32).reshape(-1, 1)
+              merged = np.hstack([generated_data_np, predict_np])
+              epoch_data.append(merged)
+            generated_df = pd.DataFrame(np.vstack(epoch_data), columns=fields)
+            filtered_df = filtering(generated_df)
+            total = len(generated_df)
+            passed = len(filtered_df)
+            successful_attack = filtered_df[filtered_df["predict"] == 0]
+            if total > 0:
+                acc = passed / total
+                # all_data = pd.concat([all_data, successful_attack], ignore_index=True)
+                attack_success_rate = len(successful_attack) / len(generated_df)
+                accuracy.append(attack_success_rate)
+            else:
+              print("Error: generated_df")
+            if epoch % 100 == 0 or epoch == self.epochs - 1:
+                print(f"[Epoch {epoch}] 條件篩選後通過比例: {passed}/{total} = {acc:.2%}")
+                # print(f'gen_loss: {g_loss:.4f}, disc_loss: {bd_loss:.4f}')
+                # print(f'predict: {predict}')
+                print(f"[Epoch {epoch}] 條件篩選後成功攻擊比例: {len(successful_attack)}/{len(generated_df)} = {attack_success_rate:.2%}")
+                # print(f"成功攻擊樣本數：{len(all_data)}")
+                print(f"Avg 成功攻擊比例: {(sum(accuracy) / len(accuracy)) * 100}%")
+                print(f"loss: {loss:.4f}, g_loss: {g_loss:.4f}, bd_loss: {bd_loss:.4f}")
+                print(f'predict: {predict}')
+
+                if epoch == self.epochs - 1:
+                  successful_attack.to_csv(filename_output, mode='w', header=fields, index=False, encoding="utf-8")
+                  # print(accuracy)
+                  print(len(accuracy))
+                  print(f"Avg accuracy: {(sum(accuracy) / len(accuracy)) * 100}%")
+                  print(f"Save Generator...")
+                  logging.info(f"Finish training.\nAvg accuracy: {(sum(accuracy) / len(accuracy)) * 100}%\nloss: {loss:.4f}, g_loss: {g_loss:.4f}, bd_loss: {bd_loss:.4f}")
+                  joblib.dump(self.generator, "Generator.pkl")
+                print('-' * 10)
+        plt.plot(accuracy)
+        plt.xlabel("Epoch")
+        plt.ylabel("Attack Success Rate")
+        plt.title("AdvGAN Attack Success Rate Over Epochs")
+        plt.grid(True)
+
+        os.makedirs("fig", exist_ok=True)  # 若資料夾不存在則建立
+        plt.savefig(os.path.join("fig", "Attack_Success_Rate.jpg"))
         

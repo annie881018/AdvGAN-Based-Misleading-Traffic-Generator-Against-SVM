@@ -35,6 +35,7 @@ if __name__ == "__main__":
         parser.add_argument("--num_data", type=int, default=0)
         parser.add_argument("--lr", type=float, default=0.001)
         parser.add_argument("--epochs", type=int, default=10000)
+        parser.add_argument("--batch_size", type=int, default=10)
         args = parser.parse_args()
         thresh = args.thresh
         alpha = args.alpha
@@ -42,6 +43,7 @@ if __name__ == "__main__":
         epochs = args.epochs
         learning_rate = args.lr
         num_data = args.num_data
+        batch_size = args.batch_size
 
 
 
@@ -53,5 +55,6 @@ if __name__ == "__main__":
                                              thresh=thresh, 
                                              alpha=alpha, 
                                              beta=beta, 
-                                             num=num_data)
+                                             num=num_data,
+                                             batch_size=batch_size)
         Attack.train()
