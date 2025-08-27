@@ -5,6 +5,7 @@ import os
 import Generator
 import AdvGAN_Target_Model
 import AdvGAN_Discriminator
+from Filter import filtering
 from datetime import datetime
 import joblib
 import logging
@@ -133,23 +134,23 @@ class AdvGAN_attack:
 
     # 訓練過程
     def train(self, X, y):
-        # num_train = f'{self.num}_lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
-        # num_train = f'{self.num}'
-        # # print(f"Start to train data {num_train}----------------------")
-        # # formatted_date = datetime.today().strftime("%m%d")
-        # formatted_date = f'lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
-        # # 設定輸出目錄
-        # output_dir = f"result/{formatted_date}"
-
-        # # 如果目錄不存在，則創建它
-        # os.makedirs(output_dir, exist_ok=True)
-
-        # # 生成完整的輸出檔案路徑
-        # filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
-        # # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
-        # fields = self.features
+        # Set output csv
+        num_train = f'{self.num}_lr_{self.lr}_a_{self.alpha}_b_{self.beta}_thsh_{self.thresh}'
+        # print(f"Start to train data {num_train}----------------------")
+        formatted_date = datetime.today().strftime("%m%d%H")
+        # set output directory
+        output_dir = f"result/{formatted_date}"
+        # if not exist, create one directory
+        os.makedirs(output_dir, exist_ok=True)
+        # Complete output path
+        filename_output = os.path.join(output_dir, f"generated_data_{num_train}.csv")
+        # filename_output = f"result/{formatted_date}/generated_data_{num_train}.csv"
+        
+        # Complete features fields
+        fields = self.features
         # fields = fields + ["predict", "gen_loss", "disc_loss"]
-        # print(fields)
+        fields = fields + ["predict"]
+        print(fields)
         
         # batch process
         dataset = tf.data.Dataset.from_tensor_slices((X, y)).batch(self.batch_size)
@@ -165,6 +166,9 @@ class AdvGAN_attack:
         success_rates_per_epoch = []
         # gen_loss_per_epoch = []
         # disc_loss_per_epoch = []
+        
+        accuracy = []
+        batches = self.num // self.batch_size
         print(self.generator.summary())
         
         logging.basicConfig(
@@ -177,32 +181,59 @@ class AdvGAN_attack:
         print(f"Total batches: {len(dataset)}")
         print(f"Total X: {len(X)}")
         for epoch in range(self.epochs):
+            
+            # Start to train
+            epoch_data = []
+            passed = -1
+            total = -1
+            acc = -1
+            successful_attack = -1
+            attack_success_rate = -1
+            generated_df = []
             epoch_success_rates = []
             # epoch_gen_loss = []
             # epoch_disc_loss = []
-            print(f"[Epoch {epoch}]")
+            # print(f"[Epoch {epoch}]")
             for step, (batch_x, batch_y) in enumerate(dataset):
                 # epoch += 1
                 # 執行訓練步驟
                 generated_data, batch_predict, gen_loss, disc_loss = self.train_step(batch_x)
-                
-                # calculate accuracy
-                y_true = batch_y.numpy()
-                y_pred = batch_predict
-                mask_attack = (y_true == 1)
-                mask_success = (y_true == 1) & (y_pred == 0)
-                
-                if np.sum(mask_attack) > 0:
-                    success = np.sum(mask_success) / np.sum(mask_attack)
-                    epoch_success_rates.append(success)    
-            
-            
-            # 記錄這個 epoch 的平均攻擊成功率
-            if epoch_success_rates:
-                mean_success = np.mean(epoch_success_rates)
+                generated_data_np = generated_data.numpy()
+                predict_np = np.array(batch_predict, dtype=np.float32).reshape(-1, 1)
+                merged = np.hstack([generated_data_np, predict_np])
+                epoch_data.append(merged)
+            generated_df = pd.DataFrame(np.vstack(epoch_data), columns=fields)
+            filtered_df = filtering(generated_df)
+            total = len(generated_df)
+            passed = len(filtered_df)
+            successful_attack = filtered_df[filtered_df["predict"] == 0]
+            if total > 0:
+                acc = passed / total
+                # all_data = pd.concat([all_data, successful_attack], ignore_index=True)
+                attack_success_rate = len(successful_attack) / len(generated_df)
+                accuracy.append(attack_success_rate)
             else:
-                mean_success = 0.0            
-            success_rates_per_epoch.append(mean_success)
+              print("Error: generated_df")
+            if epoch % 100 == 0 or epoch == self.epochs - 1:
+                print(f"[Epoch {epoch}] 條件篩選後通過比例: {passed}/{total} = {acc:.2%}")
+                # print(f'gen_loss: {g_loss:.4f}, disc_loss: {bd_loss:.4f}')
+                # print(f'predict: {predict}')
+                print(f"[Epoch {epoch}] 條件篩選後成功攻擊比例: {len(successful_attack)}/{len(generated_df)} = {attack_success_rate:.2%}")
+                # print(f"成功攻擊樣本數：{len(all_data)}")
+                print(f"Avg 成功攻擊比例: {(sum(accuracy) / len(accuracy)) * 100}%")
+                print(f"gen_loss: {gen_loss:.4f}, disc_loss: {disc_loss:.4f}")
+                print(f'predict: {batch_predict}')
+
+                if epoch == self.epochs - 1:
+                  successful_attack.to_csv(filename_output, mode='w', header=fields, index=False, encoding="utf-8")
+                  # print(accuracy)
+                  print(len(accuracy))
+                  print(f"Avg accuracy: {(sum(accuracy) / len(accuracy)) * 100}%")
+                  print(f"Save Generator...")
+                  logging.info(f"Finish training.\nAvg accuracy: {(sum(accuracy) / len(accuracy)) * 100}%\ngen_loss: {gen_loss:.4f}, disc_loss: {disc_loss:.4f}")
+                  joblib.dump(self.generator, "Generator.pkl")
+                print('-' * 10)
+
             
             
             # 記錄這個 epoch 的平均gen_loss
@@ -219,14 +250,6 @@ class AdvGAN_attack:
             #     mean_disc_loss = 0.0            
             # disc_loss_per_epoch.append(mean_disc_loss)
 
-            if epoch % 10 == 0:
-                print(f"[Epoch {epoch}] Adv Attack Success Rate: {mean_success:.2%}")
-                print(f'Epoch {epoch}, gen_loss: {gen_loss:.4f}, disc_loss: {disc_loss:.4f}')
-                print(f'predict: {batch_predict}')
-                #print(f'Epoch {epoch}, Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}')
-                # Print the values of generated_features
-                # print("generated_data:", generated_data)
-                print("----------------------------------------------------------------------")
 
                 # Record generated data and loss
                 # transform generated_data and predict to numpy array
@@ -239,10 +262,10 @@ class AdvGAN_attack:
                 # all_data.append(merged_array)
                 # if predict == 0:
                 #     label_0_data.append(merged_array)
-        accuracy = np.mean(success_rates_per_epoch)
+        # accuracy = np.mean(accuracy)
         # loss_gen = np.mean(gen_loss_per_epoch)
-        logging.info(f"Finish training.\nAccuracy: {accuracy:.4f}, Gen loss: {gen_loss:.4f}, Disc loss: {disc_loss:.4f}")
-        plt.plot(success_rates_per_epoch)
+        # logging.info(f"Finish training.\nAccuracy: {accuracy:.4f}, Gen loss: {gen_loss:.4f}, Disc loss: {disc_loss:.4f}")
+        plt.plot(accuracy)
         plt.xlabel("Epoch")
         plt.ylabel("Attack Success Rate")
         plt.title("AdvGAN Attack Success Rate Over Epochs")
@@ -251,9 +274,9 @@ class AdvGAN_attack:
         os.makedirs("fig", exist_ok=True)  # 若資料夾不存在則建立
         plt.savefig(os.path.join("fig", "Attack_Success_Rate.jpg"))
         
-        print(f"Save Generator...")
-        joblib.dump(self.generator, "Generator.pkl")
-        logging.info(f"Save generator.")
+        # print(f"Save Generator...")
+        # joblib.dump(self.generator, "Generator.pkl")
+        # logging.info(f"Save generator.")
         # print(f"Save Disciminator...")
         # joblib.dump(self.discriminator, "Discriminator.pkl")
         # logging.info(f"Save discriminator.")
