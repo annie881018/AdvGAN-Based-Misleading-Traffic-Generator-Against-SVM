@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import os
-import Generator
+import AdvGAN_Generator
 import AdvGAN_Target_Model
 import AdvGAN_Discriminator
 from datetime import datetime
@@ -27,7 +27,7 @@ class AdvGAN_attack:
         self.mse = tf.keras.losses.MeanSquaredError()
         self.generator_optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
         self.discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
-        self.generator = Generator.build_generator(feature_dim=self.feature_dim)
+        self.generator = AdvGAN_Generator.build_generator(feature_dim=self.feature_dim)
         self.discriminator = AdvGAN_Discriminator.build_discriminator(feature_dim=self.feature_dim)
         self.target_model = AdvGAN_Target_Model.build_discriminator()
         self.num = num
